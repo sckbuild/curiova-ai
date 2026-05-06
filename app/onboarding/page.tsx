@@ -341,9 +341,9 @@ function Step3({ data, setData, onNext, onBack }: {
   );
 }
 
-function Step4({ data, setData, onSubmit, onBack, loading }: {
+function Step4({ data, setData, onSubmit, onBack, loading, submitError }: {
   data: FormData; setData: (d: FormData) => void;
-  onSubmit: () => void; onBack: () => void; loading: boolean;
+  onSubmit: () => void; onBack: () => void; loading: boolean; submitError: string | null;
 }) {
   const allChecked = data.consent1 && data.consent2 && data.consent3;
 
@@ -402,6 +402,12 @@ function Step4({ data, setData, onSubmit, onBack, loading }: {
         You can download or delete all data anytime from the Privacy Center.
       </p>
 
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 font-body">
+          {submitError}
+        </div>
+      )}
+
       <div className="flex gap-3">
         <Button variant="ghost" size="lg" className="text-muted border-ink/20" onClick={onBack}>← Back</Button>
         <Button
@@ -424,6 +430,7 @@ export default function OnboardingPage() {
   const [data, setData] = useState<FormData>(INIT);
   const [loading, setLoading] = useState(false);
   const [direction, setDirection] = useState(1);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   function goNext() {
     setDirection(1);
@@ -437,6 +444,7 @@ export default function OnboardingPage() {
 
   async function handleSubmit() {
     setLoading(true);
+    setSubmitError(null);
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -446,7 +454,7 @@ export default function OnboardingPage() {
         "CBSE": "CBSE", "ICSE": "ICSE", "State Board": "STATE", "US K–12": "US_K12", "IB": "IB",
       };
 
-      await supabase.from("children").insert({
+      const { error } = await supabase.from("children").insert({
         parent_id: user.id,
         full_name: data.childName,
         grade: data.grade,
@@ -458,9 +466,14 @@ export default function OnboardingPage() {
         screen_minutes_used: 0,
       });
 
-      router.push("/learn");
+      if (error) {
+        setSubmitError(error.message);
+        return;
+      }
+
+      router.push("/dashboard");
     } catch (err) {
-      console.error(err);
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -486,7 +499,7 @@ export default function OnboardingPage() {
               {step === 2 && <Step2 {...stepProps} />}
               {step === 3 && <Step3 {...stepProps} />}
               {step === 4 && (
-                <Step4 {...{ data, setData, onBack: goBack, onSubmit: handleSubmit, loading }} />
+                <Step4 {...{ data, setData, onBack: goBack, onSubmit: handleSubmit, loading, submitError }} />
               )}
             </motion.div>
           </AnimatePresence>
