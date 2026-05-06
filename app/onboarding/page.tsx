@@ -457,8 +457,12 @@ export default function OnboardingPage() {
       const { error } = await supabase.from("children").insert({
         parent_id: user.id,
         full_name: data.childName,
+        age: data.age,
         grade: data.grade,
+        country: data.country,
         curriculum: curriculumMap[data.curriculum] ?? "CBSE",
+        language: data.language,
+        sessions_per_day: data.sessionsPerDay,
         screen_time_ratio: data.screenTimeRatio,
         total_xp: 0,
         current_difficulty: 2,
