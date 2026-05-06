@@ -1,11 +1,13 @@
+// SERVER ONLY — never import this in client components
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaude, safeParseJSON } from "@/lib/anthropic";
+import { rateLimit } from "@/lib/rate-limit";
 
-const Schema = z.object({ child_id: z.string() });
+const Schema = z.object({ child_id: z.string().uuid() });
 
 interface InsightRaw {
   type: "win" | "warn" | "info";
@@ -42,10 +44,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = Schema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
     }
 
     const { child_id } = parsed.data;
+
+    const rl = rateLimit(`insights:${child_id}`, 5, 24 * 60 * 60_000);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many requests", retryAfter: Math.ceil((rl.resetAt - Date.now()) / 1000) },
+        { status: 429 }
+      );
+    }
+
     const admin = createAdminClient();
 
     // ─── Verify child belongs to parent ────────────────────────────────────

@@ -1,6 +1,8 @@
+// SERVER ONLY — never import this in client components
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { callClaude, safeParseJSON } from "@/lib/anthropic";
+import { rateLimit } from "@/lib/rate-limit";
 import type { GradeResult } from "@/types/learning";
 
 const Schema = z.object({
@@ -10,6 +12,7 @@ const Schema = z.object({
   child_answer: z.string(),
   age: z.number().int().min(7).max(17),
   difficulty_level: z.number().int().min(1).max(5),
+  session_id: z.string().optional(),
 });
 
 function norm(s: string) {
@@ -21,10 +24,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = Schema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { question_text, correct_answer, acceptable_answers, child_answer, age } = parsed.data;
+    const { question_text, correct_answer, acceptable_answers, child_answer, age, session_id } = parsed.data;
+
+    const rl = rateLimit(session_id ?? "global", 30, 60_000);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many requests", retryAfter: Math.ceil((rl.resetAt - Date.now()) / 1000) },
+        { status: 429 }
+      );
+    }
 
     // Fast path: exact match
     const allAccepted = [correct_answer, ...acceptable_answers].map(norm);

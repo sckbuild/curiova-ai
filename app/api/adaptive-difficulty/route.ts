@@ -1,6 +1,8 @@
+// SERVER ONLY — never import this in client components
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rateLimit } from "@/lib/rate-limit";
 import type { AdaptiveResult } from "@/types/learning";
 
 const Schema = z.object({
@@ -40,10 +42,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = Schema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
     }
 
     const { recent_answers, current_difficulty, child_id, subject, topic } = parsed.data;
+
+    const rl = rateLimit(child_id, 60, 60_000);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many requests", retryAfter: Math.ceil((rl.resetAt - Date.now()) / 1000) },
+        { status: 429 }
+      );
+    }
 
     // Use last 5 answers only
     const window = recent_answers.slice(-5);

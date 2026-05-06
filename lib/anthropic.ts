@@ -1,3 +1,4 @@
+// SERVER ONLY — never import this in client components
 import Anthropic from "@anthropic-ai/sdk";
 
 export const anthropic = new Anthropic({

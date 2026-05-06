@@ -1,22 +1,8 @@
+// SERVER ONLY — never import this in client components
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { callClaude, safeParseJSON } from "@/lib/anthropic";
-
-// ─── Rate limiter (in-memory, per session) ────────────────────────────────────
-
-const rl = new Map<string, { count: number; resetAt: number }>();
-
-function checkRL(sessionId: string): boolean {
-  const now = Date.now();
-  const entry = rl.get(sessionId);
-  if (!entry || now > entry.resetAt) {
-    rl.set(sessionId, { count: 1, resetAt: now + 60_000 });
-    return true;
-  }
-  if (entry.count >= 30) return false;
-  entry.count++;
-  return true;
-}
+import { rateLimit } from "@/lib/rate-limit";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -131,8 +117,12 @@ export async function POST(request: Request) {
     }
 
     const data = parsed.data;
-    if (!checkRL(data.session_id)) {
-      return NextResponse.json({ error: "Rate limit exceeded. Please wait." }, { status: 429 });
+    const rl = rateLimit(data.session_id, 30, 60_000);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many requests", retryAfter: Math.ceil((rl.resetAt - Date.now()) / 1000) },
+        { status: 429 }
+      );
     }
 
     const isLast = data.question_number % 10 === 0;
