@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
     const cfg = LEVEL_CFG[new_difficulty as keyof typeof LEVEL_CFG];
 
-    // Update topic_mastery (fire-and-forget)
+    // Update topic_mastery with new difficulty (fire-and-forget)
     try {
       const admin = createAdminClient();
       await admin.from("topic_mastery").upsert(
@@ -89,12 +89,13 @@ export async function POST(request: Request) {
           child_id,
           subject_id: subject,
           topic_id: topic,
+          current_difficulty: new_difficulty,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "child_id,subject_id,topic_id" }
       );
     } catch {
-      // Non-fatal — DB might not have this table yet
+      // Non-fatal
     }
 
     return NextResponse.json({

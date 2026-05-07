@@ -254,7 +254,8 @@ export default function LearnPage() {
   }
 
   const doneCount = quests.filter((q) => q.status === "done").length;
-  const screenTarget = Math.max(screenEarned, 45);
+  // Daily screen time target: sessions_per_day × 15 min base × ratio
+  const screenTarget = Math.max((child?.sessions_per_day ?? quests.length) * 15 * (child?.screen_time_ratio ?? 1), 15);
 
   return (
     <div className="min-h-screen bg-cream pb-16">

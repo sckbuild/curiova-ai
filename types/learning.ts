@@ -128,6 +128,7 @@ export interface ChildProfile {
   grade: number;
   curriculum: string;
   screen_time_ratio: number;
+  sessions_per_day: number;
   total_xp: number;
   current_difficulty: number;
   screen_minutes_earned: number;

@@ -312,7 +312,7 @@ export default async function DashboardPage() {
       .from("streaks")
       .select("current_streak, longest_streak")
       .eq("child_id", child.id)
-      .single(),
+      .maybeSingle(),
     supabase
       .from("ai_insights")
       .select("*")

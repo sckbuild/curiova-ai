@@ -215,7 +215,7 @@ export default function SessionCompletePage() {
       .from("streaks")
       .select("current_streak")
       .eq("child_id", (childRow as { id?: string; full_name?: string } | null)?.id ?? user.id)
-      .single();
+      .maybeSingle();
 
     setSession({
       childName: (childRow as { full_name?: string } | null)?.full_name ?? "Explorer",

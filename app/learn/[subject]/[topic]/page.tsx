@@ -497,7 +497,7 @@ export default function QuestionSessionPage() {
               correct_answer: fq.correct_answer,
               acceptable_answers: fq.acceptable_answers,
               child_answer: answer ?? "",
-              age: cp?.grade ? cp.grade + 5 : 12,
+              age: cp?.age ?? 12,
               difficulty_level: state.difficulty,
             }),
           });
