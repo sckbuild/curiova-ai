@@ -490,16 +490,18 @@ export default function QuestionSessionPage() {
   );
 
   const handlePuzzleComplete = useCallback(
-    (isCorrect: boolean, explanation: string) => {
+    (isCorrect: boolean) => {
       const xpDelta = isCorrect ? 30 : 10;
+      // Add XP and correct answer to state, then advance directly — no explanation phase for puzzles
       dispatch({
         type: "SUBMIT_RESULT",
         isCorrect,
         score: isCorrect ? 3 : 1,
-        explanation,
+        explanation: "",
         hint: null,
         xpDelta,
       });
+      setTimeout(() => dispatch({ type: "NEXT_QUESTION" }), 400);
     },
     []
   );

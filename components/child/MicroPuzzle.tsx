@@ -8,7 +8,7 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 interface Props {
   puzzle: MicroPuzzleQuestion;
-  onComplete: (isCorrect: boolean, explanation: string) => void;
+  onComplete: (isCorrect: boolean) => void;
 }
 
 function pad(n: number) {
@@ -211,7 +211,7 @@ export function MicroPuzzle({ puzzle, onComplete }: Props) {
       const isCorrect =
         userAnswer.trim().toLowerCase() ===
         puzzle.correct_answer.trim().toLowerCase();
-      onComplete(isCorrect, puzzle.explanation);
+      onComplete(isCorrect);
     },
     [submitted, puzzle, onComplete]
   );
