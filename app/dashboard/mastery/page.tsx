@@ -89,10 +89,25 @@ export default function MasteryPage() {
 
     if (!childId) return;
     const supabase = createClient();
+
+    // Get session IDs for this specific topic so responses are filtered correctly
+    const { data: topicSessions } = await supabase
+      .from("study_sessions")
+      .select("id")
+      .eq("child_id", childId)
+      .eq("topic_id", topicId);
+
+    const sessionIds = (topicSessions ?? []).map((s: { id: string }) => s.id);
+    if (sessionIds.length === 0) {
+      setTopicResponses([]);
+      setResponsesLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from("question_responses")
       .select("question_type, is_correct, answered_at, fill_answer, selected_option")
-      .eq("child_id", childId)
+      .in("session_id", sessionIds)
       .order("answered_at", { ascending: false })
       .limit(10);
 

@@ -115,6 +115,8 @@ export default function LearnPage() {
   const [child, setChild] = useState<ChildProfile | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [streak, setStreak] = useState(0);
+  const [freezeAvailable, setFreezeAvailable] = useState(false);
+  const [freezeUsing, setFreezeUsing] = useState(false);
   const [xpToday, setXpToday] = useState(0);
   const [screenEarned, setScreenEarned] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -141,13 +143,21 @@ export default function LearnPage() {
 
     setChild(childRow as ChildProfile);
 
-    // Fetch streak
+    // Fetch streak and freeze status
     const { data: streakRow } = await supabase
       .from("streaks")
-      .select("current_streak")
+      .select("current_streak, freeze_used_at")
       .eq("child_id", childRow.id)
-      .single();
-    setStreak(streakRow?.current_streak ?? 0);
+      .maybeSingle();
+    const currentStreak = (streakRow as { current_streak?: number } | null)?.current_streak ?? 0;
+    setStreak(currentStreak);
+
+    // Freeze is available if streak > 0, no session done today, and freeze not used in last 7 days
+    const freezeUsedAt = (streakRow as { freeze_used_at?: string | null } | null)?.freeze_used_at;
+    const freezeRecent = freezeUsedAt
+      ? (Date.now() - new Date(freezeUsedAt).getTime()) < 7 * 24 * 60 * 60 * 1000
+      : false;
+    setFreezeAvailable(currentStreak > 0 && !freezeRecent);
 
     // Fetch today's sessions
     const todayStart = new Date();
@@ -211,6 +221,21 @@ export default function LearnPage() {
     setLoading(false);
   }, [router]);
 
+  const applyFreeze = useCallback(async () => {
+    if (!child || freezeUsing || !freezeAvailable) return;
+    setFreezeUsing(true);
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("streaks")
+        .update({ freeze_used_at: new Date().toISOString() })
+        .eq("child_id", child.id);
+      setFreezeAvailable(false);
+    } finally {
+      setFreezeUsing(false);
+    }
+  }, [child, freezeUsing, freezeAvailable]);
+
   useEffect(() => {
     void fetchData();
     const interval = setInterval(() => void fetchData(), 30_000);
@@ -268,6 +293,32 @@ export default function LearnPage() {
               />
             </div>
           </div>
+
+          {/* Streak freeze banner — only when no session done yet and freeze available */}
+          {freezeAvailable && doneCount === 0 && streak > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-3 rounded-xl px-4 py-3 flex items-center justify-between gap-3"
+              style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🧊</span>
+                <div>
+                  <p className="font-body font-semibold text-white text-xs">Streak freeze available</p>
+                  <p className="font-body text-white/70 text-[11px]">Protect your {streak}-day streak if you can&apos;t study today</p>
+                </div>
+              </div>
+              <button
+                onClick={() => void applyFreeze()}
+                disabled={freezeUsing}
+                className="font-body font-bold text-xs px-3 py-1.5 rounded-lg bg-white text-coral shrink-0 disabled:opacity-50"
+              >
+                {freezeUsing ? "Saving…" : "Use freeze"}
+              </button>
+            </motion.div>
+          )}
         </div>
       </div>
 

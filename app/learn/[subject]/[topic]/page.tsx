@@ -35,6 +35,7 @@ const INIT_STATE: SessionState = {
   score: null,
   explanation: null,
   hint: null,
+  hintVisible: false,
   levelChangeMessage: null,
   levelChangeDirection: null,
   newDifficulty: null,
@@ -65,6 +66,7 @@ function reducer(state: SessionState, action: SessionAction): SessionState {
         score: null,
         explanation: null,
         hint: null,
+        hintVisible: false,
         timeLeft: TIMER_SECONDS,
         timerActive: phase === "question",
         error: null,
@@ -73,6 +75,9 @@ function reducer(state: SessionState, action: SessionAction): SessionState {
           : state.recentQuestionTexts,
       };
     }
+
+    case "SHOW_HINT":
+      return { ...state, hintVisible: true };
 
     case "SELECT_ANSWER":
       if (state.phase !== "question") return state;
@@ -115,6 +120,7 @@ function reducer(state: SessionState, action: SessionAction): SessionState {
         score: null,
         explanation: null,
         hint: null,
+        hintVisible: false,
         levelChangeMessage: null,
         levelChangeDirection: null,
         newDifficulty: null,
@@ -308,6 +314,7 @@ export default function QuestionSessionPage() {
   const [state, dispatch] = useReducer(reducer, INIT_STATE);
   const [child, setChild] = useState<ChildProfile | null>(null);
   const childRef = useRef<ChildProfile | null>(null);
+  const questionCacheRef = useRef<Map<number, Question>>(new Map());
 
   // ─── Timer tick ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -322,6 +329,12 @@ export default function QuestionSessionPage() {
       dispatch({ type: "TIMEOUT" });
     }
   }, [state.timeLeft, state.phase, state.timerActive]);
+
+  // ─── Clear prefetch cache when difficulty changes ─────────────────────────
+  useEffect(() => {
+    questionCacheRef.current.clear();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.difficulty]);
 
   // ─── Load question when phase=loading ────────────────────────────────────
   useEffect(() => {
@@ -375,47 +388,80 @@ export default function QuestionSessionPage() {
 
     const difficulty = (mastery as { current_difficulty?: number } | null)?.current_difficulty ?? cp.current_difficulty ?? 2;
 
-    // Create study session
+    // Create study session — retry up to 3× with backoff so temp IDs are a last resort
+    const sessionStartedAt = new Date().toISOString();
     let sessionId = `temp-${Date.now()}`;
-    try {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const { data: sess } = await supabase.from("study_sessions").insert({
         child_id: cp.id,
         subject_id: subjectId,
         topic_id: topicId,
-        started_at: new Date().toISOString(),
+        started_at: sessionStartedAt,
         difficulty_start: difficulty,
-      }).select().single();
-      if (sess) sessionId = sess.id;
-    } catch {
-      // Non-fatal
+      }).select("id").single();
+      if (sess?.id) { sessionId = sess.id; break; }
+      if (attempt < 2) await new Promise<void>((r) => setTimeout(r, 400 * (attempt + 1)));
     }
 
     dispatch({ type: "INIT", sessionId, difficulty });
+  }
+
+  async function fetchQuestion(
+    questionNum: number,
+    cp: ChildProfile,
+    difficulty: number,
+    sessionId: string,
+    recentTexts: string[]
+  ): Promise<Question> {
+    const res = await fetch("/api/generate-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject: subjectId,
+        topic: topicId,
+        grade: cp.grade,
+        curriculum: cp.curriculum,
+        difficulty_level: difficulty,
+        age: cp.age ?? 12,
+        language: "English",
+        question_number: questionNum,
+        session_id: sessionId,
+        recent_question_texts: recentTexts,
+      }),
+    });
+    return (await res.json()) as Question;
+  }
+
+  async function prefetch(questionNum: number, cp: ChildProfile, difficulty: number, sessionId: string, recentTexts: string[]) {
+    if (questionNum > SESSION_QUESTION_COUNT) return;
+    if (questionCacheRef.current.has(questionNum)) return;
+    try {
+      const q = await fetchQuestion(questionNum, cp, difficulty, sessionId, recentTexts);
+      // Only cache if difficulty hasn't changed while we were fetching
+      if (!questionCacheRef.current.has(questionNum)) {
+        questionCacheRef.current.set(questionNum, q);
+      }
+    } catch { /* silently fail — main loadQuestion will fetch if cache misses */ }
   }
 
   async function loadQuestion() {
     const cp = childRef.current ?? child;
     if (!cp) return;
 
+    // Serve from prefetch cache if available (eliminates spinner for pre-fetched questions)
+    const cached = questionCacheRef.current.get(state.currentQuestionNum);
+    if (cached) {
+      questionCacheRef.current.delete(state.currentQuestionNum);
+      dispatch({ type: "SET_QUESTION", question: cached });
+      void prefetch(state.currentQuestionNum + 1, cp, state.difficulty, state.sessionId, state.recentQuestionTexts);
+      return;
+    }
+
     try {
-      const res = await fetch("/api/generate-question", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: subjectId,
-          topic: topicId,
-          grade: cp.grade,
-          curriculum: cp.curriculum,
-          difficulty_level: state.difficulty,
-          age: cp.age ?? 12,
-          language: "English",
-          question_number: state.currentQuestionNum,
-          session_id: state.sessionId,
-          recent_question_texts: state.recentQuestionTexts,
-        }),
-      });
-      const q = (await res.json()) as Question;
+      const q = await fetchQuestion(state.currentQuestionNum, cp, state.difficulty, state.sessionId, state.recentQuestionTexts);
       dispatch({ type: "SET_QUESTION", question: q });
+      // Pre-fetch next question while child reads the current one
+      void prefetch(state.currentQuestionNum + 1, cp, state.difficulty, state.sessionId, state.recentQuestionTexts);
     } catch {
       dispatch({ type: "SET_ERROR", error: "Failed to load question. Please try again." });
     }
@@ -541,27 +587,76 @@ export default function QuestionSessionPage() {
 
   async function completeSession() {
     const cp = childRef.current ?? child;
-    if (!cp || !state.sessionId || state.sessionId.startsWith("temp-")) return;
+    if (!cp || !state.sessionId) return;
 
     const correctCount = state.recentAnswers.filter(Boolean).length;
     const bonus = correctCount >= XP_BONUS_THRESHOLD ? XP_BONUS_AMOUNT : 0;
     const totalXp = state.xpEarned + bonus;
     const screenMins = Math.floor((correctCount / SESSION_QUESTION_COUNT) * 15 * cp.screen_time_ratio);
+    const completedAt = new Date().toISOString();
 
     const supabase = createClient();
 
-    // Update study session
-    try {
-      await supabase.from("study_sessions").update({
-        completed_at: new Date().toISOString(),
+    let finalSessionId = state.sessionId;
+
+    // If session never made it to DB (all 3 inserts failed at init), try one last retroactive save
+    if (state.sessionId.startsWith("temp-")) {
+      const startedAt = new Date(parseInt(state.sessionId.replace("temp-", ""), 10)).toISOString();
+      const { data: retried } = await supabase.from("study_sessions").insert({
+        child_id: cp.id,
+        subject_id: subjectId,
+        topic_id: topicId,
+        started_at: startedAt,
+        difficulty_start: state.difficulty,
+        completed_at: completedAt,
         total_questions: SESSION_QUESTION_COUNT,
         correct_answers: correctCount,
         xp_earned: totalXp,
         difficulty_end: state.difficulty,
         screen_minutes_earned: screenMins,
-      }).eq("id", state.sessionId);
-    } catch {
-      // Non-fatal
+      }).select("id").single();
+
+      if (retried?.id) {
+        finalSessionId = retried.id;
+      } else {
+        // Truly offline — still update mastery and redirect home without complete page
+        try {
+          const recentScore = (correctCount / SESSION_QUESTION_COUNT) * 100;
+          const { data: existing } = await supabase
+            .from("topic_mastery")
+            .select("mastery_score, sessions_count")
+            .eq("child_id", cp.id).eq("topic_id", topicId).single();
+          const existingRecord = existing as { mastery_score?: number; sessions_count?: number } | null;
+          const newScore = existingRecord?.mastery_score
+            ? recentScore * 0.6 + existingRecord.mastery_score * 0.4
+            : recentScore;
+          await supabase.from("topic_mastery").upsert({
+            child_id: cp.id, subject_id: subjectId, topic_id: topicId,
+            mastery_score: Math.round(newScore),
+            sessions_count: (existingRecord?.sessions_count ?? 0) + 1,
+            is_mastered: newScore >= 80,
+            last_studied_at: completedAt, updated_at: completedAt,
+          }, { onConflict: "child_id,subject_id,topic_id" });
+        } catch { /* non-fatal */ }
+        router.push("/learn");
+        return;
+      }
+    }
+
+    // Update study session record (normal path — session already exists)
+    if (!state.sessionId.startsWith("temp-")) {
+      try {
+        await supabase.from("study_sessions").update({
+          completed_at: completedAt,
+          total_questions: SESSION_QUESTION_COUNT,
+          correct_answers: correctCount,
+          xp_earned: totalXp,
+          difficulty_end: state.difficulty,
+          screen_minutes_earned: screenMins,
+        }).eq("id", finalSessionId);
+      } catch {
+        // Non-fatal
+      }
     }
 
     // Update topic mastery
@@ -595,7 +690,7 @@ export default function QuestionSessionPage() {
       // Non-fatal
     }
 
-    router.push(`/learn/complete/${state.sessionId}`);
+    router.push(`/learn/complete/${finalSessionId}`);
   }
 
   function handleLeave() {
@@ -681,6 +776,26 @@ export default function QuestionSessionPage() {
             </AnimatePresence>
 
             <RubricStrip />
+
+            {/* Hint button + hint callout */}
+            {state.phase === "question" && q.hint && !state.hintVisible && (
+              <button
+                onClick={() => dispatch({ type: "SHOW_HINT" })}
+                className="w-full py-2.5 rounded-xl font-body text-sm font-semibold transition-colors"
+                style={{ background: "rgba(255,190,0,0.12)", color: "#b38600", border: "1px solid rgba(255,190,0,0.3)" }}
+              >
+                💡 Need a hint?
+              </button>
+            )}
+            {state.hintVisible && q.hint && (
+              <div
+                className="rounded-xl p-4"
+                style={{ background: "rgba(255,190,0,0.08)", border: "1px solid rgba(255,190,0,0.25)" }}
+              >
+                <p className="font-body text-[11px] uppercase tracking-widest mb-1" style={{ color: "#b38600" }}>Hint 💡</p>
+                <p className="font-body text-sm text-ink/80">{q.hint}</p>
+              </div>
+            )}
 
             {/* Submit button */}
             {state.phase === "question" && (

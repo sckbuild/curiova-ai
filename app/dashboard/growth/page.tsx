@@ -91,7 +91,7 @@ export default function GrowthPage() {
         .from("streaks")
         .select("current_streak, longest_streak")
         .eq("child_id", child.id)
-        .single(),
+        .maybeSingle(),
       supabase
         .from("topic_mastery")
         .select("topic_id, subject_id, is_mastered, last_studied_at, mastery_score")

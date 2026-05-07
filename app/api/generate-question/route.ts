@@ -89,14 +89,14 @@ function buildObjectivePrompt(data: z.infer<typeof Schema>): string {
   return `Generate one ${data.subject} multiple-choice question on topic: "${data.topic}" for Grade ${data.grade} ${data.curriculum}.
 
 Return EXACTLY this JSON (no other text):
-{"type":"objective","question_text":"string","options":[{"key":"A","text":"string"},{"key":"B","text":"string"},{"key":"C","text":"string"},{"key":"D","text":"string"}],"correct_key":"A","correct_answer":"string","explanation":"string","difficulty_label":"${DIFFICULTY[data.difficulty_level].split(":")[0].trim()}","curriculum_topic":"string"}`;
+{"type":"objective","question_text":"string","options":[{"key":"A","text":"string"},{"key":"B","text":"string"},{"key":"C","text":"string"},{"key":"D","text":"string"}],"correct_key":"A","correct_answer":"string","explanation":"string","hint":"One sentence nudging in the right direction without giving away the answer","difficulty_label":"${DIFFICULTY[data.difficulty_level].split(":")[0].trim()}","curriculum_topic":"string"}`;
 }
 
 function buildFillBlankPrompt(data: z.infer<typeof Schema>): string {
   return `Generate one ${data.subject} fill-in-the-blank question on topic: "${data.topic}" for Grade ${data.grade} ${data.curriculum}. Use [BLANK] as the placeholder.
 
 Return EXACTLY this JSON (no other text):
-{"type":"fill_blank","question_text":"sentence with [BLANK]","correct_answer":"string","acceptable_answers":["string"],"explanation":"string","difficulty_label":"string","curriculum_topic":"string"}`;
+{"type":"fill_blank","question_text":"sentence with [BLANK]","correct_answer":"string","acceptable_answers":["string"],"explanation":"string","hint":"One sentence nudging in the right direction without revealing the answer","difficulty_label":"string","curriculum_topic":"string"}`;
 }
 
 function buildPuzzlePrompt(data: z.infer<typeof Schema>): string {

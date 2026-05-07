@@ -12,6 +12,7 @@ export interface ObjectiveQuestion {
   correct_key: "A" | "B" | "C" | "D";
   correct_answer: string;
   explanation: string;
+  hint?: string;
   difficulty_label: string;
   curriculum_topic: string;
 }
@@ -22,6 +23,7 @@ export interface FillBlankQuestion {
   correct_answer: string;
   acceptable_answers: string[];
   explanation: string;
+  hint?: string;
   difficulty_label: string;
   curriculum_topic: string;
 }
@@ -94,6 +96,7 @@ export interface SessionState {
   score: number | null;
   explanation: string | null;
   hint: string | null;
+  hintVisible: boolean;
   levelChangeMessage: string | null;
   levelChangeDirection: "up" | "down" | null;
   newDifficulty: number | null;
@@ -108,6 +111,7 @@ export type SessionAction =
   | { type: "SET_QUESTION"; question: Question }
   | { type: "SELECT_ANSWER"; answer: string }
   | { type: "SUBMIT_RESULT"; isCorrect: boolean; score: number; explanation: string; hint: string | null; xpDelta: number }
+  | { type: "SHOW_HINT" }
   | { type: "SHOW_LEVEL_CHANGE"; message: string; direction: "up" | "down"; newDifficulty: number }
   | { type: "NEXT_QUESTION" }
   | { type: "COMPLETE" }
