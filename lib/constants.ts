@@ -59,6 +59,14 @@ export const SUBJECTS = [
 
 export const SCREEN_TIME_RATIO_OPTIONS = [1, 2, 3, 4, 5] as const;
 
+// ─── Shared form options ───────────────────────────────────────────────────────
+
+export const CURRICULA_OPTIONS = ["CBSE", "ICSE", "State Board", "US K–12", "IB"] as const;
+export const CURRICULA_DB_MAP: Record<string, string> = {
+  "CBSE": "CBSE", "ICSE": "ICSE", "State Board": "STATE", "US K–12": "US_K12", "IB": "IB",
+};
+export const LANGUAGES_OPTIONS = ["English", "Hindi", "Tamil", "Telugu", "Marathi", "Bengali", "Kannada"] as const;
+
 // ─── XP & Scoring ─────────────────────────────────────────────────────────────
 
 export const XP_PER_CORRECT = 10;

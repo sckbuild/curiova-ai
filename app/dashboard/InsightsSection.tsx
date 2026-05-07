@@ -83,8 +83,7 @@ export function InsightsSection({ initialInsights, childId, childName }: Insight
                 Recommended action
               </p>
               <p className="font-body text-cream text-sm">
-                {/* action field not in type but stored in DB — fallback */}
-                Schedule a 20-minute study session focused on this area.
+                {activeInsight.action ?? "Schedule a 20-minute study session focused on this area."}
               </p>
             </div>
             <button

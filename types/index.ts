@@ -149,6 +149,8 @@ export interface AiInsight {
   insight_type: InsightType;
   title: string;
   body: string;
+  action: string | null;
+  data_point: string | null;
   subject_id: string | null;
   topic_id: string | null;
   is_read: boolean;

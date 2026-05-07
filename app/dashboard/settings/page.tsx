@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { LANGUAGES_OPTIONS } from "@/lib/constants";
 
 const TABS = ["Profile", "Child Profile", "Guardrails", "Notifications", "Security"] as const;
 type Tab = typeof TABS[number];
 
 const CURRICULA = ["CBSE", "ICSE", "STATE", "US_K12", "IB"] as const;
-const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Kannada"] as const;
+const LANGUAGES = LANGUAGES_OPTIONS;
 
 interface ChildRow {
   id: string;

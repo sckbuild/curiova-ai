@@ -120,6 +120,7 @@ export type SessionAction =
 export interface ChildProfile {
   id: string;
   full_name: string;
+  age: number;
   grade: number;
   curriculum: string;
   screen_time_ratio: number;

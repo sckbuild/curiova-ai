@@ -407,7 +407,7 @@ export default function QuestionSessionPage() {
           grade: cp.grade,
           curriculum: cp.curriculum,
           difficulty_level: state.difficulty,
-          age: 12, // default, ideally from profile
+          age: cp.age ?? 12,
           language: "English",
           question_number: state.currentQuestionNum,
           session_id: state.sessionId,
@@ -476,6 +476,7 @@ export default function QuestionSessionPage() {
         void supabase.from("question_responses").insert({
           session_id: state.sessionId,
           child_id: cp.id,
+          question_id: `${state.sessionId}-q${state.currentQuestionNum}`,
           question_type: q.type,
           selected_option: q.type === "objective" ? answer : null,
           fill_answer: q.type === "fill_blank" ? answer : null,
@@ -568,12 +569,14 @@ export default function QuestionSessionPage() {
       const recentScore = (correctCount / SESSION_QUESTION_COUNT) * 100;
       const { data: existing } = await supabase
         .from("topic_mastery")
-        .select("mastery_score")
+        .select("mastery_score, sessions_count")
         .eq("child_id", cp.id)
         .eq("topic_id", topicId)
         .single();
 
-      const existingScore = (existing as { mastery_score?: number } | null)?.mastery_score ?? 0;
+      const existingRecord = existing as { mastery_score?: number; sessions_count?: number } | null;
+      const existingScore = existingRecord?.mastery_score ?? 0;
+      const existingSessions = existingRecord?.sessions_count ?? 0;
       const newScore = existingScore
         ? recentScore * 0.6 + existingScore * 0.4
         : recentScore;
@@ -583,6 +586,7 @@ export default function QuestionSessionPage() {
         subject_id: subjectId,
         topic_id: topicId,
         mastery_score: Math.round(newScore),
+        sessions_count: existingSessions + 1,
         is_mastered: newScore >= 80,
         last_studied_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

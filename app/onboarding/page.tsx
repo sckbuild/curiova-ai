@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { CURRICULA_OPTIONS, CURRICULA_DB_MAP, LANGUAGES_OPTIONS } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,8 +40,8 @@ const STEPS = [
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-const CURRICULA = ["CBSE", "ICSE", "State Board", "US K–12", "IB"];
-const LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Marathi", "Bengali"];
+const CURRICULA = CURRICULA_OPTIONS;
+const LANGUAGES = LANGUAGES_OPTIONS;
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
@@ -432,6 +433,23 @@ export default function OnboardingPage() {
   const [direction, setDirection] = useState(1);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Redirect to dashboard if child profile already exists
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("children")
+        .select("id")
+        .eq("parent_id", user.id)
+        .limit(1)
+        .single()
+        .then(({ data: child }) => {
+          if (child) router.replace("/dashboard");
+        });
+    });
+  }, [router]);
+
   function goNext() {
     setDirection(1);
     setStep((s) => s + 1);
@@ -450,17 +468,13 @@ export default function OnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/auth/login"); return; }
 
-      const curriculumMap: Record<string, string> = {
-        "CBSE": "CBSE", "ICSE": "ICSE", "State Board": "STATE", "US K–12": "US_K12", "IB": "IB",
-      };
-
       const { error } = await supabase.from("children").insert({
         parent_id: user.id,
         full_name: data.childName,
         age: data.age,
         grade: data.grade,
         country: data.country,
-        curriculum: curriculumMap[data.curriculum] ?? "CBSE",
+        curriculum: CURRICULA_DB_MAP[data.curriculum] ?? "CBSE",
         language: data.language,
         sessions_per_day: data.sessionsPerDay,
         screen_time_ratio: data.screenTimeRatio,

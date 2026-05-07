@@ -161,6 +161,8 @@ Return exactly this JSON array (3 objects, no other text):
         insight_type: ins.type,
         title: ins.title,
         body: ins.body,
+        action: ins.action ?? null,
+        data_point: ins.data_point ?? null,
         is_read: false,
         created_at: new Date().toISOString(),
       }))
